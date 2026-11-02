@@ -1,0 +1,64 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="PackedScene" path="res://scenes/planet.tscn" id="2_planet"]
+[ext_resource type="PackedScene" path="res://scenes/player.tscn" id="3_player"]
+[ext_resource type="Script" path="res://scripts/wave_manager.gd" id="4_waves"]
+[ext_resource type="PackedScene" path="res://scenes/hud.tscn" id="5_hud"]
+[ext_resource type="Script" path="res://scripts/starfield.gd" id="6_stars"]
+
+[sub_resource type="ProceduralSkyMaterial" id="SkyMat_space"]
+sky_top_color = Color(0.02, 0.02, 0.07, 1)
+sky_horizon_color = Color(0.07, 0.05, 0.14, 1)
+ground_bottom_color = Color(0.02, 0.02, 0.07, 1)
+ground_horizon_color = Color(0.07, 0.05, 0.14, 1)
+
+[sub_resource type="Sky" id="Sky_space"]
+sky_material = SubResource("SkyMat_space")
+
+[sub_resource type="Environment" id="Env_space"]
+background_mode = 2
+sky = SubResource("Sky_space")
+ambient_light_source = 2
+ambient_light_color = Color(0.4, 0.45, 0.7, 1)
+ambient_light_energy = 1.0
+tonemap_mode = 2
+glow_enabled = true
+
+[node name="Main" type="Node3D"]
+process_mode = 3
+script = ExtResource("1_main")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env_space")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866025, -0.409576, 0.286788, 0.000000, 0.573576, 0.819152, -0.500000, -0.709406, 0.496732, 0, 0, 0)
+light_energy = 1.2
+shadow_enabled = true
+directional_shadow_max_distance = 80.0
+
+[node name="FillLight" type="DirectionalLight3D" parent="Sun"]
+transform = Transform3D(1, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, 0)
+light_color = Color(0.45, 0.55, 1, 1)
+light_energy = 0.35
+
+[node name="Starfield" type="MultiMeshInstance3D" parent="."]
+script = ExtResource("6_stars")
+
+[node name="Planet" parent="." instance=ExtResource("2_planet")]
+process_mode = 1
+
+[node name="Player" parent="." instance=ExtResource("3_player")]
+process_mode = 1
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 30.5, 0)
+
+[node name="Enemies" type="Node3D" parent="."]
+process_mode = 1
+
+[node name="WaveManager" type="Node" parent="." node_paths=PackedStringArray("enemies_root")]
+process_mode = 1
+script = ExtResource("4_waves")
+enemies_root = NodePath("../Enemies")
+
+[node name="HUD" parent="." instance=ExtResource("5_hud")]
