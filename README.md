@@ -6,6 +6,8 @@ A Godot 4.3 prototype. You're stranded on a tiny spherical planet and have to su
 
 Open the folder in Godot 4.3 or newer (**Import → project.godot**) and press **F5**.
 
+The project uses the **Compatibility** (OpenGL 3) renderer so it runs on laptops and integrated GPUs without Vulkan.
+
 ## Controls
 
 | Action | Input |
