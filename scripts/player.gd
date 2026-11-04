@@ -41,7 +41,7 @@ const AIM_MASK := 1 | 4  # world + enemies
 
 @export_group("Mining")
 @export var cargo_capacity := 40.0
-@export var mining_rate := 8.0  ## Fuel per second.
+@export var mining_rate := 4.0  ## Fuel per second.
 @export var mining_range := 3.2
 @export var cargo_slowdown := 0.3  ## Speed lost at full cargo.
 
@@ -60,22 +60,24 @@ var _invuln_timer := 0.0
 var _body_material: StandardMaterial3D
 var _prompt := ""
 var _mining_target: FuelDeposit
-var _panel_material := StandardMaterial3D.new()
+var _mining_interrupted := false  # Set by damage/attacks; cleared when E is released.
+var _panel_material: StandardMaterial3D
+var _muzzle: Marker3D
 var _shield := MeshInstance3D.new()
 var _beam := MeshInstance3D.new()
 var _day_night: DayNight
 
 @onready var _camera_pivot: Node3D = $CameraPivot
 @onready var _camera: Camera3D = $CameraPivot/SpringArm3D/Camera3D
-@onready var _muzzle: Marker3D = $Muzzle
-@onready var _body: MeshInstance3D = $Body
+@onready var _rig: CrawlerRig = $Rig
 
 
 func _ready() -> void:
 	super()
 	health = max_health
-	_body_material = (_body.mesh.surface_get_material(0) as StandardMaterial3D).duplicate()
-	_body.material_override = _body_material
+	_body_material = _rig.hull_material
+	_panel_material = _rig.panel_material
+	_muzzle = _rig.muzzle
 	energy = max_energy
 	_day_night = get_tree().get_first_node_in_group("day_night") as DayNight
 	_build_gear()
@@ -108,6 +110,9 @@ func _physics_process(delta: float) -> void:
 	_update_powerups(delta)
 
 	var input := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+	var rooted := _mining_target != null  # Braced in the mining stance.
+	if rooted:
+		input = Vector2.ZERO
 	var sprinting := Input.is_action_pressed("sprint") and input != Vector2.ZERO and energy > 0.0
 	if sprinting:
 		_spend_energy(sprint_energy_cost * delta)
@@ -122,7 +127,7 @@ func _physics_process(delta: float) -> void:
 	var accel := acceleration if is_on_floor() else acceleration * air_control
 	horizontal = horizontal.lerp(target, clampf(accel * delta, 0.0, 1.0))
 	if is_on_floor():
-		if Input.is_action_just_pressed("jump"):
+		if Input.is_action_just_pressed("jump") and not rooted:
 			vertical = jump_velocity
 	else:
 		vertical -= gravity_strength * delta
@@ -135,6 +140,13 @@ func _physics_process(delta: float) -> void:
 			_spend_energy(nova_energy_cost)
 			_nova()
 	_update_interaction(delta)
+	var mine_point := _mining_target.global_position + _mining_target.global_basis.y * 0.6 if _mining_target else Vector3.ZERO
+	_rig.animate(delta, split_velocity()[0].length() if is_on_floor() else 0.0, _mining_target != null, mine_point)
+
+
+func _interrupt_mining() -> void:
+	if _mining_target or Input.is_action_pressed("interact"):
+		_mining_interrupted = true
 
 
 func apply_powerup(type: Powerup.Type) -> void:
@@ -172,6 +184,8 @@ func _update_powerups(delta: float) -> void:
 ## Deposits cargo at the dropship automatically; E mines nearby fuel or launches.
 func _update_interaction(delta: float) -> void:
 	var interact := Input.is_action_pressed("interact")
+	if not interact:
+		_mining_interrupted = false
 	var prompt := ""
 	_mining_target = null
 	if dropship and dropship.is_in_range(self):
@@ -192,6 +206,8 @@ func _update_interaction(delta: float) -> void:
 				prompt = "Cargo full - return to the dropship"
 			elif energy <= 0.0:
 				prompt = "Out of energy - get into the sunlight"
+			elif interact and _mining_interrupted:
+				prompt = "Interrupted - release and press E to mine again"
 			elif interact:
 				prompt = "Mining..."
 				_mining_target = deposit
@@ -226,34 +242,21 @@ func _update_beam() -> void:
 	var dir := to - from
 	var y := dir.normalized()
 	var x := y.cross(Vector3.UP if absf(y.y) < 0.9 else Vector3.RIGHT).normalized()
-	_beam.global_transform = Transform3D(Basis(x, y * dir.length(), y.cross(x)), from + dir * 0.5)
+	var pulse := 1.0 + 0.4 * sin(Time.get_ticks_msec() * 0.03)
+	_beam.global_transform = Transform3D(Basis(x * pulse, y * dir.length(), y.cross(x) * pulse), from + dir * 0.5)
 
 
 func _build_gear() -> void:
-	_panel_material.albedo_color = Color(0.1, 0.15, 0.4)
-	_panel_material.metallic = 0.8
-	_panel_material.roughness = 0.2
-	_panel_material.emission_enabled = true
-	_panel_material.emission = Color(0.3, 0.6, 1.0)
-	var panel_mesh := BoxMesh.new()
-	panel_mesh.size = Vector3(1.1, 0.06, 0.7)
-	panel_mesh.material = _panel_material
-	var panel := MeshInstance3D.new()
-	panel.mesh = panel_mesh
-	panel.position = Vector3(0, 1.75, 0.45)
-	panel.rotation.x = deg_to_rad(-30.0)
-	add_child(panel)
-
 	var shield_mat := StandardMaterial3D.new()
 	shield_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	shield_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	shield_mat.albedo_color = Color(0.3, 0.7, 1.0, 0.25)
 	var shield_mesh := SphereMesh.new()
-	shield_mesh.radius = 1.4
-	shield_mesh.height = 2.8
+	shield_mesh.radius = 1.7
+	shield_mesh.height = 3.4
 	shield_mesh.material = shield_mat
 	_shield.mesh = shield_mesh
-	_shield.position = Vector3(0, 1.0, 0)
+	_shield.position = Vector3(0, 0.7, 0)
 	_shield.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_shield.visible = false
 	add_child(_shield)
@@ -262,8 +265,8 @@ func _build_gear() -> void:
 	beam_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	beam_mat.albedo_color = FuelDeposit.COLOR
 	var beam_mesh := CylinderMesh.new()
-	beam_mesh.top_radius = 0.04
-	beam_mesh.bottom_radius = 0.04
+	beam_mesh.top_radius = 0.06
+	beam_mesh.bottom_radius = 0.06
 	beam_mesh.height = 1.0
 	beam_mesh.material = beam_mat
 	_beam.mesh = beam_mesh
@@ -276,6 +279,7 @@ func _build_gear() -> void:
 func take_damage(amount: float) -> void:
 	if is_dead or _invuln_timer > 0.0:
 		return
+	_interrupt_mining()
 	if powerup_timers.has(Powerup.Type.SHIELD):
 		_flash(Powerup.INFO[Powerup.Type.SHIELD].color)
 		return
@@ -297,6 +301,7 @@ func heal(amount: float) -> void:
 
 
 func _fire() -> void:
+	_interrupt_mining()
 	_fire_timer = fire_cooldown
 	var origin := _muzzle.global_position
 	var dir := (_get_aim_point() - origin).normalized()
@@ -323,6 +328,7 @@ func _get_aim_point() -> Vector3:
 
 
 func _nova() -> void:
+	_interrupt_mining()
 	_nova_timer = nova_cooldown
 	nova_cooldown_changed.emit(_nova_timer, nova_cooldown)
 	for enemy in get_tree().get_nodes_in_group("enemies"):
