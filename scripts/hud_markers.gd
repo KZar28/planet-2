@@ -29,7 +29,7 @@ func _marker(camera: Camera3D, pos: Vector3, color: Color, text: String, always:
 	var behind := camera.is_position_behind(pos)
 	var screen := Vector2.ZERO if behind else camera.unproject_position(pos)
 	var bounds := Rect2(EDGE_MARGIN, TOP_MARGIN, size.x - 2.0 * EDGE_MARGIN, size.y - TOP_MARGIN - EDGE_MARGIN)
-	var on_screen := not behind and bounds.has_point(screen)
+	var on_screen := not behind and (bounds if always else get_rect()).has_point(screen)
 	if not always and (not on_screen or _blocked_by_planet(from, pos)):
 		return
 	if on_screen:
