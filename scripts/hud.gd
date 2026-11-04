@@ -16,6 +16,8 @@ var _message_token := 0
 @onready var _asteroid_label: Label = $WaveInfo/AsteroidLabel
 @onready var _fuel_label: Label = $WaveInfo/FuelLabel
 @onready var _prompt: Label = $Prompt
+@onready var fade_rect: ColorRect = $Fade
+@onready var _fade_label: Label = $Fade/FadeLabel
 @onready var _overlay: Control = $Overlay
 @onready var _overlay_title: Label = $Overlay/Center/Box/Title
 @onready var _overlay_body: Label = $Overlay/Center/Box/Body
@@ -47,6 +49,34 @@ func set_powerups(active: Dictionary) -> void:
 	for type in active:
 		lines.append("%s %.0fs" % [Powerup.INFO[type].name, ceilf(active[type])])
 	_powerup_label.text = "\n".join(lines)
+
+
+func set_gameplay_visible(visible_now: bool) -> void:
+	for node: CanvasItem in [$Stats, $WaveInfo, $Crosshair, $Markers, _prompt]:
+		node.visible = visible_now
+
+
+func fade(to_alpha: float, duration: float) -> void:
+	create_tween().tween_property(fade_rect, "color:a", to_alpha, duration)
+
+
+func set_fade_alpha(alpha: float) -> void:
+	fade_rect.color.a = alpha
+
+
+func set_fade_text(text: String) -> void:
+	_fade_label.text = text
+
+
+func show_title(best: int) -> void:
+	_overlay.show()
+	_overlay.color.a = 0.3
+	_overlay_title.text = "PLANET 2"
+	_overlay_body.text = "Mine fuel. Survive the dark side. Reach the next asteroid.\n\nWASD move   Mouse aim   LMB shoot   F Nova\nShift sprint   E mine / launch   Esc pause\n\nBest score: %d\n\nClick to start" % best
+
+
+func hide_overlay() -> void:
+	_overlay.hide()
 
 
 func set_prompt(text: String) -> void:
@@ -100,6 +130,7 @@ func show_message(text: String, duration := 2.0) -> void:
 
 func show_paused(paused: bool) -> void:
 	_overlay.visible = paused
+	_overlay.color.a = 0.6
 	_overlay_title.text = "PAUSED"
 	_overlay_body.text = "Press Esc or click to resume"
 
@@ -107,6 +138,7 @@ func show_paused(paused: bool) -> void:
 func show_game_over(level: int, wave: int, score: int, high_score: int) -> void:
 	_message.text = ""
 	_overlay.show()
+	_overlay.color.a = 0.6
 	_overlay_title.text = "YOU WERE OVERRUN"
 	var best := "New best!" if score >= high_score and score > 0 else "Best: %d" % high_score
 	_overlay_body.text = "Reached asteroid %d, wave %d\nScore: %d   %s\n\nPress R or Enter to try again" % [level, wave, score, best]
