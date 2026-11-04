@@ -42,9 +42,9 @@ The project uses the **Compatibility** (OpenGL 3) renderer so it runs on laptops
 - **Spherical gravity.** `SphereWalker` (`scripts/sphere_walker.gd`) is the base class for the player and the monsters. It pulls toward the planet center and re-orients the body every physics frame so local +Y points away from the surface. `up_direction` is updated too, so `is_on_floor()` and `move_and_slide()` behave as they would on flat ground.
 - **Waves.** `scripts/wave_manager.gd` spawns monsters at least 50° around the asteroid from the player. When a wave is cleared there's a 10-second intermission and you heal 25 HP. Each wave adds more monsters and gives them more HP.
 - **Monsters** (`scripts/enemy.gd`). There are three types, tuned through the `STATS` table:
-  - **Crawler** (red): the baseline monster.
-  - **Runner** (orange): small, fast and fragile. Appears from wave 2.
-  - **Brute** (purple): big, slow and tanky. Appears from wave 3.
+  - **Crawler** (red crab): the baseline monster. Crabs (`scripts/crab_rig.gd`) scuttle on six legs with swinging, clacking pincers that snap forward on attack.
+  - **Runner** (orange crab): small, fast and fragile. Appears from wave 2.
+  - **Brute** (purple frog, `scripts/frog_rig.gd`): big, slow and tanky. Appears from wave 3. It crouches for `hop_pause` (0.8s), then leaps; hop distance keeps its average speed at its stat speed and never overshoots the player.
 - **Asteroid** (`scripts/planet.gd`, radius 40). Craters, rocks, crystals and fuel deposits are scattered from a seed that changes per asteroid. Rocks and deposits have collision.
 - Your best score is saved to `user://save.cfg`.
 
