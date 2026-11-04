@@ -6,6 +6,8 @@ signal depleted(deposit: FuelDeposit)
 
 const COLOR := Color(1.0, 0.55, 0.1)
 
+const EPSILON := 0.01
+
 @export var amount := 20.0
 
 var remaining := 0.0

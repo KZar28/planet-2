@@ -271,7 +271,13 @@ func _update_interaction(delta: float) -> void:
 				prompt = "Mining..."
 				_mining_target = deposit
 				_spend_energy(mining_energy_cost * delta)
-				cargo += deposit.mine(minf(mining_rate * delta, cargo_capacity - cargo))
+				var space := cargo_capacity - cargo
+				var request := minf(mining_rate * delta, space)
+				if deposit.remaining - request < FuelDeposit.EPSILON and deposit.remaining <= space:
+					request = deposit.remaining  # Finish the deposit instead of stranding float dust.
+				cargo += deposit.mine(request)
+				if cargo_capacity - cargo < FuelDeposit.EPSILON:
+					cargo = cargo_capacity
 				cargo_changed.emit(cargo, cargo_capacity)
 			else:
 				prompt = "Hold E to mine fuel"

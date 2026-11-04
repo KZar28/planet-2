@@ -152,7 +152,7 @@ func deposit(amount: float) -> void:
 
 
 func quota_met() -> bool:
-	return stored >= quota
+	return stored >= quota - FuelDeposit.EPSILON
 
 
 func _add_mesh(mesh: Mesh, offset: Vector3) -> MeshInstance3D:

@@ -56,7 +56,7 @@ func set_energy(current: float, maximum: float, light: float) -> void:
 
 
 func set_cargo(carried: float, capacity: float) -> void:
-	_cargo_label.text = "Cargo: %d / %d fuel" % [floori(carried), roundi(capacity)]
+	_cargo_label.text = "Cargo: %d / %d fuel" % [floori(carried + FuelDeposit.EPSILON), roundi(capacity)]
 
 
 func set_powerups(active: Dictionary) -> void:
@@ -103,7 +103,7 @@ func set_asteroid(level: int) -> void:
 
 
 func set_fuel(stored: float, quota: float) -> void:
-	_fuel_label.text = "Dropship fuel: %d / %d" % [floori(stored), roundi(quota)]
+	_fuel_label.text = "Dropship fuel: %d / %d" % [floori(stored + FuelDeposit.EPSILON), roundi(quota)]
 
 
 func set_health(current: float, maximum: float) -> void:
