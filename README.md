@@ -27,7 +27,7 @@ The project uses the **Compatibility** (OpenGL 3) renderer so it runs on laptops
 **Game loop.** You land on an asteroid next to your dropship. Fuel deposits (glowing orange crystals) are scattered at least 25° of arc away from it. Hold E next to one to mine it. You can carry 40 fuel and it slows you down, so you walk it back; walking onto the dropship pad deposits it automatically. Once the dropship has its quota (60 + 20 × asteroid number), press E at the dropship to launch to the next asteroid. Each asteroid has a new layout, a bigger quota, more deposits and tougher, more numerous monsters. Waves keep coming the whole time.
 
 - **Title, landing and launch sequences** (`scripts/main.gd`, `Phase` enum). The first load shows a title screen over an orbiting view of the asteroid. Starting the game plays a landing: the dropship descends with thrusters while a cinematic camera tracks it, then you get control and the waves begin. Launching plays a 3-2-1 countdown, liftoff, and a fade to "Traveling to Asteroid N", then the landing on the next asteroid. Click or Esc skips a cinematic.
-- **Day/night spin** (`scripts/day_night.gd`). The sun orbits the asteroid once every 150s. `DayNight.light_at(pos)` returns 0 (night) to 1 (day) for any surface point, and the other systems use it.
+- **Day/night spin** (`scripts/day_night.gd`). The sun orbits the asteroid once every 480s (8 minutes). `DayNight.light_at(pos)` returns 0 (night) to 1 (day) for any surface point, and the other systems use it.
 - **Solar energy.** The panel on your back charges energy in sunlight (9/s in full sun) and you lose 0.8/s in darkness. Sprinting (12/s), mining (5/s) and Nova (30) use it, so long night trips are risky.
 - **Dark side.** Monsters prefer to spawn in darkness. In full dark they move 45% faster, hit 60% harder and take 1/1.6 damage, and their eyes turn magenta.
 - **Night powerups** (`scripts/powerup_spawner.gd`, `scripts/powerup.gd`). While you're on the night side, every 4s there's a 40% chance a powerup drops nearby (max 3 at once, they despawn after 30s): Shield (blocks all damage, 8s), Speed Boost (1.5×, 10s), Double Damage (10s), Spread Shot (3-way fire, 12s).
@@ -35,7 +35,7 @@ The project uses the **Compatibility** (OpenGL 3) renderer so it runs on laptops
 - The run's asteroid number and score live in the `GameState` autoload (`scripts/game_state.gd`) and carry across launches. Dying resets them.
 
 - **Spherical gravity.** `SphereWalker` (`scripts/sphere_walker.gd`) is the base class for the player and the monsters. It pulls toward the planet center and re-orients the body every physics frame so local +Y points away from the surface. `up_direction` is updated too, so `is_on_floor()` and `move_and_slide()` behave as they would on flat ground.
-- **Waves.** `scripts/wave_manager.gd` spawns monsters at least 50° around the asteroid from the player. When a wave is cleared there's a short intermission and you heal 25 HP. Each wave adds more monsters and gives them more HP.
+- **Waves.** `scripts/wave_manager.gd` spawns monsters at least 50° around the asteroid from the player. When a wave is cleared there's a 10-second intermission and you heal 25 HP. Each wave adds more monsters and gives them more HP.
 - **Monsters** (`scripts/enemy.gd`). There are three types, tuned through the `STATS` table:
   - **Crawler** (red): the baseline monster.
   - **Runner** (orange): small, fast and fragile. Appears from wave 2.

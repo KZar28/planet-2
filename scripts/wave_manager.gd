@@ -12,7 +12,7 @@ const ENEMY := preload("res://scenes/enemy.tscn")
 
 @export var enemies_root: Node3D
 @export var first_wave_delay := 4.0
-@export var intermission := 6.0
+@export var intermission := 10.0
 @export var spawn_interval := 0.5
 ## Enemies spawn at least this far (as an angle around the planet) from the player.
 @export var min_spawn_angle_deg := 50.0
@@ -60,11 +60,11 @@ func _process(delta: float) -> void:
 
 static func build_wave(n: int) -> Array[Enemy.Type]:
 	var list: Array[Enemy.Type] = []
-	for i in 3 + n * 2:
+	for i in 5 + n * 3:
 		list.append(Enemy.Type.CRAWLER)
-	for i in maxi(n - 1, 0) * 2:
+	for i in maxi(n - 1, 0) * 3:
 		list.append(Enemy.Type.RUNNER)
-	for i in maxi(n - 2, 0):
+	for i in ceili(maxi(n - 2, 0) * 1.5):
 		list.append(Enemy.Type.BRUTE)
 	list.shuffle()
 	return list
@@ -74,7 +74,7 @@ func _start_next_wave() -> void:
 	wave += 1
 	_in_intermission = false
 	_queue = build_wave(wave)
-	for i in (GameState.level - 1) * 2:
+	for i in (GameState.level - 1) * 3:
 		_queue.append(Enemy.Type.CRAWLER if i % 3 else Enemy.Type.RUNNER)
 	_queue.shuffle()
 	_remaining = _queue.size()
