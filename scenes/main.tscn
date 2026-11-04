@@ -75,4 +75,7 @@ process_mode = 1
 script = ExtResource("4_waves")
 enemies_root = NodePath("../Enemies")
 
+[node name="CinematicCamera" type="Camera3D" parent="."]
+fov = 60.0
+
 [node name="HUD" parent="." instance=ExtResource("5_hud")]

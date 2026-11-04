@@ -9,12 +9,17 @@ signal fuel_changed(stored: float, quota: float)
 
 var quota := 100.0
 var stored := 0.0
+var rest_position := Vector3.ZERO
+var thrusters_on := false
+var _flame := MeshInstance3D.new()
+var _flame_light := OmniLight3D.new()
 var _beacon: OmniLight3D
 var _t := 0.0
 
 
 func _ready() -> void:
 	add_to_group("dropship")
+	rest_position = position
 	collision_mask = 0
 	var hull := _material(Color(0.75, 0.77, 0.8), 0.7)
 	var dark := _material(Color(0.2, 0.22, 0.25), 0.3)
@@ -27,7 +32,10 @@ func _ready() -> void:
 	pad.bottom_radius = 4.2
 	pad.height = 0.15
 	pad.material = dark
-	_add_mesh(pad, Vector3(0, 0.05, 0))
+	var pad_instance := _add_mesh(pad, Vector3(0, 0.05, 0))
+	# The pad stays on the ground when the ship lifts off.
+	pad_instance.top_level = true
+	pad_instance.global_transform = global_transform * Transform3D(Basis(), Vector3(0, 0.05, 0))
 	var body := CylinderMesh.new()
 	body.top_radius = 0.9
 	body.bottom_radius = 1.6
@@ -67,11 +75,39 @@ func _ready() -> void:
 	_beacon.position = Vector3(0, 6.5, 0)
 	add_child(_beacon)
 
+	var flame_mat := StandardMaterial3D.new()
+	flame_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	flame_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	flame_mat.albedo_color = Color(1.0, 0.6, 0.2, 0.85)
+	var flame_mesh := CylinderMesh.new()
+	flame_mesh.top_radius = 1.1
+	flame_mesh.bottom_radius = 0.0
+	flame_mesh.height = 3.5
+	flame_mesh.material = flame_mat
+	_flame.mesh = flame_mesh
+	_flame.position = Vector3(0, -1.1, 0)
+	_flame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_flame)
+	_flame_light.light_color = Color(1.0, 0.6, 0.25)
+	_flame_light.omni_range = 14.0
+	_flame_light.position = Vector3(0, -0.5, 0)
+	add_child(_flame_light)
+	set_thrusters(false)
+
 
 func _process(delta: float) -> void:
 	_t += delta
 	var speed := 6.0 if quota_met() else 2.0
 	_beacon.light_energy = 1.0 + sin(_t * speed) * 0.8
+	if thrusters_on:
+		_flame.scale = Vector3(1.0, randf_range(0.8, 1.25), 1.0)
+		_flame_light.light_energy = randf_range(2.0, 4.0)
+
+
+func set_thrusters(on: bool) -> void:
+	thrusters_on = on
+	_flame.visible = on
+	_flame_light.visible = on
 
 
 func is_in_range(node: Node3D) -> bool:
@@ -87,11 +123,12 @@ func quota_met() -> bool:
 	return stored >= quota
 
 
-func _add_mesh(mesh: Mesh, offset: Vector3) -> void:
+func _add_mesh(mesh: Mesh, offset: Vector3) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
 	mi.position = offset
 	add_child(mi)
+	return mi
 
 
 func _material(color: Color, metallic: float) -> StandardMaterial3D:

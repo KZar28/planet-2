@@ -3,6 +3,8 @@ extends Node
 
 var level := 1
 var score := 0
+## Only the first load of a session shows the title screen.
+var show_title := true
 
 
 func reset() -> void:
