@@ -53,8 +53,6 @@ func _ready() -> void:
 ## Removes up to `requested` fuel and returns how much was actually taken.
 func mine(requested: float) -> float:
 	var taken := minf(requested, remaining)
-	if remaining - taken < EPSILON:
-		taken = remaining  # Don't strand float dust that would never be mined.
 	remaining -= taken
 	_visual.scale = Vector3.ONE * lerpf(0.35, 1.0, remaining / amount)
 	if remaining <= 0.0:
