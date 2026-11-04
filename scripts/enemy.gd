@@ -86,6 +86,8 @@ func _ready() -> void:
 	_rig.body_material = _material
 	_rig.eye_material = _eye_material
 	_visual.add_child(_rig)
+	if _hops:
+		_add_hitbox(Vector3(1.4, 0.9, 1.1), Vector3(0, 0.95, -0.6))
 
 
 func _physics_process(delta: float) -> void:
@@ -176,6 +178,16 @@ func _attack() -> void:
 	var tween := create_tween()
 	tween.tween_property(_visual, "position", Vector3(0, 0, -0.4 * _size), 0.08)
 	tween.tween_property(_visual, "position", Vector3.ZERO, 0.15)
+
+
+## Extra collider (in unscaled rig space) so shots hit parts that stick out of the body sphere.
+func _add_hitbox(box_size: Vector3, center: Vector3) -> void:
+	var shape := BoxShape3D.new()
+	shape.size = box_size * _size
+	var hitbox := CollisionShape3D.new()
+	hitbox.shape = shape
+	hitbox.position = center * _size
+	add_child(hitbox)
 
 
 ## Credits for killing this enemy: scaled by tier, +50% in full dark.
