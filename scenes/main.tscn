@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://scenes/planet.tscn" id="2_planet"]
@@ -6,6 +6,9 @@
 [ext_resource type="Script" path="res://scripts/wave_manager.gd" id="4_waves"]
 [ext_resource type="PackedScene" path="res://scenes/hud.tscn" id="5_hud"]
 [ext_resource type="Script" path="res://scripts/starfield.gd" id="6_stars"]
+[ext_resource type="Script" path="res://scripts/day_night.gd" id="7_daynight"]
+[ext_resource type="Script" path="res://scripts/dropship.gd" id="8_dropship"]
+[ext_resource type="Script" path="res://scripts/powerup_spawner.gd" id="9_powerups"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMat_space"]
 sky_top_color = Color(0.02, 0.02, 0.07, 1)
@@ -21,7 +24,7 @@ background_mode = 2
 sky = SubResource("Sky_space")
 ambient_light_source = 2
 ambient_light_color = Color(0.4, 0.45, 0.7, 1)
-ambient_light_energy = 1.0
+ambient_light_energy = 0.45
 tonemap_mode = 2
 glow_enabled = true
 
@@ -33,15 +36,17 @@ script = ExtResource("1_main")
 environment = SubResource("Env_space")
 
 [node name="Sun" type="DirectionalLight3D" parent="."]
-transform = Transform3D(0.866025, -0.409576, 0.286788, 0.000000, 0.573576, 0.819152, -0.500000, -0.709406, 0.496732, 0, 0, 0)
-light_energy = 1.2
+process_mode = 1
+light_color = Color(1, 0.96, 0.88, 1)
+light_energy = 1.4
+script = ExtResource("7_daynight")
 shadow_enabled = true
 directional_shadow_max_distance = 80.0
 
 [node name="FillLight" type="DirectionalLight3D" parent="Sun"]
 transform = Transform3D(1, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, 0)
 light_color = Color(0.45, 0.55, 1, 1)
-light_energy = 0.35
+light_energy = 0.2
 
 [node name="Starfield" type="MultiMeshInstance3D" parent="."]
 script = ExtResource("6_stars")
@@ -51,7 +56,16 @@ process_mode = 1
 
 [node name="Player" parent="." instance=ExtResource("3_player")]
 process_mode = 1
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 30.5, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 40.05, 6.05)
+
+[node name="Dropship" type="StaticBody3D" parent="."]
+process_mode = 1
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 39.9, 0)
+script = ExtResource("8_dropship")
+
+[node name="PowerupSpawner" type="Node" parent="."]
+process_mode = 1
+script = ExtResource("9_powerups")
 
 [node name="Enemies" type="Node3D" parent="."]
 process_mode = 1

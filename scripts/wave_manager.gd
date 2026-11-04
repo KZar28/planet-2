@@ -18,6 +18,9 @@ const ENEMY := preload("res://scenes/enemy.tscn")
 @export var min_spawn_angle_deg := 50.0
 @export var spawn_height := 4.0
 @export var health_growth_per_wave := 0.12
+@export var health_growth_per_asteroid := 0.25
+## Chance to accept a spawn point in daylight; monsters prefer the dark side.
+@export var daylight_spawn_chance := 0.25
 
 var wave := 0
 var _queue: Array[Enemy.Type] = []
@@ -71,6 +74,9 @@ func _start_next_wave() -> void:
 	wave += 1
 	_in_intermission = false
 	_queue = build_wave(wave)
+	for i in (GameState.level - 1) * 2:
+		_queue.append(Enemy.Type.CRAWLER if i % 3 else Enemy.Type.RUNNER)
+	_queue.shuffle()
 	_remaining = _queue.size()
 	_spawn_timer = 0.0
 	wave_started.emit(wave, _remaining)
@@ -79,7 +85,7 @@ func _start_next_wave() -> void:
 
 func _spawn_enemy(enemy_type: Enemy.Type) -> void:
 	var enemy := ENEMY.instantiate() as Enemy
-	enemy.setup(enemy_type, 1.0 + health_growth_per_wave * (wave - 1))
+	enemy.setup(enemy_type, 1.0 + health_growth_per_wave * (wave - 1) + health_growth_per_asteroid * (GameState.level - 1))
 	enemy.position = _random_spawn_position()
 	enemy.died.connect(_on_enemy_died)
 	enemies_root.add_child(enemy)
@@ -89,10 +95,13 @@ func _random_spawn_position() -> Vector3:
 	var center := _planet.global_position
 	var player_up := (_player.global_position - center).normalized()
 	var dir := -player_up
-	for i in 30:
+	var day_night := get_tree().get_first_node_in_group("day_night") as DayNight
+	for i in 40:
 		var candidate := Vector3(randfn(0, 1), randfn(0, 1), randfn(0, 1)).normalized()
-		if rad_to_deg(candidate.angle_to(player_up)) >= min_spawn_angle_deg:
-			dir = candidate
+		if rad_to_deg(candidate.angle_to(player_up)) < min_spawn_angle_deg:
+			continue
+		dir = candidate
+		if day_night == null or day_night.light_at(center + candidate) < 0.5 or randf() < daylight_spawn_chance:
 			break
 	return center + dir * (_planet.radius + spawn_height)
 

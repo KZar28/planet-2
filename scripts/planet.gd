@@ -1,32 +1,33 @@
 class_name Planet
 extends StaticBody3D
-## The spherical world. Scatters trees, rocks and crystals over the surface so
-## the player has landmarks to navigate by.
+## The asteroid. Scatters craters, rocks and crystals as landmarks and places
+## fuel deposits away from the dropship so the player has to travel to mine.
 
-@export var radius := 30.0
-@export var tree_count := 45
+@export var radius := 40.0
+@export var crater_count := 40
 @export var rock_count := 35
 @export var crystal_count := 60
 @export var decoration_seed := 1337
 ## Keep the area around the player's spawn point (top of the planet) clear.
 @export var spawn_clear_angle_deg := 12.0
+@export var base_deposit_count := 9
+@export var deposit_amount := 20.0
+## Deposits are at least this far (in degrees of arc) from the dropship.
+@export var deposit_min_angle_deg := 25.0
+@export var deposit_spacing_deg := 14.0
 
 var _rng := RandomNumberGenerator.new()
 
 
 func _ready() -> void:
-	_rng.seed = decoration_seed
-	var trunk_mesh := CylinderMesh.new()
-	trunk_mesh.top_radius = 0.18
-	trunk_mesh.bottom_radius = 0.28
-	trunk_mesh.height = 1.6
-	trunk_mesh.material = _material(Color(0.42, 0.27, 0.15))
-	var foliage_mesh := CylinderMesh.new()
-	foliage_mesh.top_radius = 0.0
-	foliage_mesh.bottom_radius = 1.1
-	foliage_mesh.height = 2.6
-	foliage_mesh.radial_segments = 8
-	foliage_mesh.material = _material(Color(0.13, 0.45, 0.2))
+	_rng.seed = decoration_seed + GameState.level * 7919
+	var crater_mesh := CylinderMesh.new()
+	crater_mesh.top_radius = 2.2
+	crater_mesh.bottom_radius = 2.6
+	crater_mesh.height = 0.3
+	crater_mesh.radial_segments = 20
+	crater_mesh.rings = 1
+	crater_mesh.material = _material(Color(0.32, 0.29, 0.27))
 	var rock_mesh := SphereMesh.new()
 	rock_mesh.radius = 0.9
 	rock_mesh.height = 1.2
@@ -41,11 +42,10 @@ func _ready() -> void:
 	crystal_mat.emission_energy_multiplier = 1.2
 	crystal_mesh.material = crystal_mat
 
-	for i in tree_count:
+	for i in crater_count:
 		var anchor := _add_anchor()
-		_add_mesh(anchor, trunk_mesh, Vector3(0, 0.8, 0))
-		_add_mesh(anchor, foliage_mesh, Vector3(0, 2.6, 0))
-		_add_collision(anchor, _cylinder_shape(0.3, 1.6), Vector3(0, 0.8, 0))
+		anchor.scale = Vector3.ONE * _rng.randf_range(0.6, 2.0)
+		_add_mesh(anchor, crater_mesh, Vector3(0, -0.1, 0))
 	for i in rock_count:
 		var anchor := _add_anchor()
 		var s := _rng.randf_range(0.7, 1.6)
@@ -58,6 +58,24 @@ func _ready() -> void:
 		var anchor := _add_anchor()
 		anchor.scale = Vector3.ONE * _rng.randf_range(0.6, 1.4)
 		_add_mesh(anchor, crystal_mesh, Vector3(0, 0.5, 0))
+	_spawn_deposits(base_deposit_count + GameState.level)
+
+
+func _spawn_deposits(count: int) -> void:
+	var placed: Array[Vector3] = []
+	for attempt in count * 40:
+		if placed.size() >= count:
+			break
+		var dir := Vector3(_rng.randfn(), _rng.randfn(), _rng.randfn()).normalized()
+		if rad_to_deg(dir.angle_to(Vector3.UP)) < deposit_min_angle_deg:
+			continue
+		if placed.any(func(other: Vector3) -> bool: return rad_to_deg(dir.angle_to(other)) < deposit_spacing_deg):
+			continue
+		placed.append(dir)
+		var deposit := FuelDeposit.new()
+		deposit.amount = deposit_amount
+		deposit.transform = surface_transform(dir, _rng.randf() * TAU)
+		add_child(deposit)
 
 
 func random_surface_direction() -> Vector3:
