@@ -166,7 +166,7 @@ func _on_wave_cleared(_wave: int) -> void:
 
 func _on_fuel_changed(stored: float, quota: float) -> void:
 	_hud.set_fuel(stored, quota)
-	if stored >= quota:
+	if _dropship.quota_met():
 		_hud.show_message("FUEL QUOTA MET\nReturn to the dropship and press E to launch", 4.0)
 
 

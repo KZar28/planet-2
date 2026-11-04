@@ -213,6 +213,8 @@ func _update_interaction(delta: float) -> void:
 				_mining_target = deposit
 				_spend_energy(mining_energy_cost * delta)
 				cargo += deposit.mine(minf(mining_rate * delta, cargo_capacity - cargo))
+				if cargo_capacity - cargo < FuelDeposit.EPSILON:
+					cargo = cargo_capacity
 				cargo_changed.emit(cargo, cargo_capacity)
 			else:
 				prompt = "Hold E to mine fuel"
