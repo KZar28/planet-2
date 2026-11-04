@@ -6,9 +6,9 @@ signal died(enemy: Enemy)
 enum Type { CRAWLER, RUNNER, BRUTE }
 
 const STATS := {
-	Type.CRAWLER: {"health": 50.0, "speed": 4.5, "damage": 8.0, "size": 1.0, "score": 10, "color": Color(0.85, 0.2, 0.2)},
-	Type.RUNNER: {"health": 25.0, "speed": 8.0, "damage": 6.0, "size": 0.7, "score": 15, "color": Color(0.95, 0.6, 0.1)},
-	Type.BRUTE: {"health": 220.0, "speed": 2.8, "damage": 25.0, "size": 1.8, "score": 40, "color": Color(0.55, 0.2, 0.7)},
+	Type.CRAWLER: {"health": 50.0, "speed": 2.7, "damage": 8.0, "size": 1.0, "score": 10, "color": Color(0.85, 0.2, 0.2)},
+	Type.RUNNER: {"health": 25.0, "speed": 4.8, "damage": 6.0, "size": 0.7, "score": 15, "color": Color(0.95, 0.6, 0.1)},
+	Type.BRUTE: {"health": 220.0, "speed": 1.7, "damage": 25.0, "size": 1.8, "score": 40, "color": Color(0.55, 0.2, 0.7)},
 }
 
 @export var type: Type = Type.CRAWLER
@@ -22,7 +22,7 @@ const STATS := {
 
 var max_health := 50.0
 var health := 50.0
-var move_speed := 4.5
+var move_speed := 2.7
 var contact_damage := 10.0
 var score_value := 10
 

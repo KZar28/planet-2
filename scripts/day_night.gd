@@ -3,7 +3,7 @@ extends DirectionalLight3D
 ## The sun orbits the asteroid to simulate its spin. Other systems call
 ## `light_at()` to find out how lit a point on the surface is.
 
-@export var day_length := 150.0  ## Seconds for one full rotation.
+@export var day_length := 480.0  ## Seconds for one full rotation.
 @export var axis := Vector3(0.25, 0.0, 1.0)
 ## Starting sun angle from the spawn point's zenith. Negative = morning.
 @export var start_angle_deg := -50.0
