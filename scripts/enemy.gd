@@ -6,9 +6,9 @@ signal died(enemy: Enemy)
 enum Type { CRAWLER, RUNNER, BRUTE }
 
 const STATS := {
-	Type.CRAWLER: {"health": 50.0, "speed": 2.7, "damage": 8.0, "size": 1.0, "score": 10, "color": Color(0.85, 0.2, 0.2)},
-	Type.RUNNER: {"health": 25.0, "speed": 4.8, "damage": 6.0, "size": 0.7, "score": 15, "color": Color(0.95, 0.6, 0.1)},
-	Type.BRUTE: {"health": 220.0, "speed": 1.7, "damage": 25.0, "size": 1.8, "score": 40, "color": Color(0.55, 0.2, 0.7)},
+	Type.CRAWLER: {"health": 50.0, "speed": 2.7, "damage": 8.0, "size": 1.0, "score": 10, "credits": 10, "color": Color(0.85, 0.2, 0.2)},
+	Type.RUNNER: {"health": 25.0, "speed": 4.8, "damage": 6.0, "size": 0.7, "score": 15, "credits": 15, "color": Color(0.95, 0.6, 0.1)},
+	Type.BRUTE: {"health": 220.0, "speed": 1.7, "damage": 25.0, "size": 1.8, "score": 40, "credits": 40, "color": Color(0.55, 0.2, 0.7)},
 }
 
 @export var type: Type = Type.CRAWLER
@@ -25,6 +25,7 @@ var health := 50.0
 var move_speed := 2.7
 var contact_damage := 10.0
 var score_value := 10
+var credit_value := 10
 
 var _size := 1.0
 var _health_multiplier := 1.0
@@ -55,6 +56,7 @@ func _ready() -> void:
 	move_speed = stats.speed
 	contact_damage = stats.damage
 	score_value = stats.score
+	credit_value = stats.credits
 	_size = stats.size
 
 	_visual.scale = Vector3.ONE * _size
@@ -124,6 +126,11 @@ func _attack() -> void:
 	var tween := create_tween()
 	tween.tween_property(_visual, "position", Vector3(0, 0, -0.4 * _size), 0.08)
 	tween.tween_property(_visual, "position", Vector3.ZERO, 0.15)
+
+
+## Credits for killing this enemy: scaled by tier, +50% in full dark.
+func credits_earned() -> int:
+	return roundi(credit_value * (1.0 + 0.5 * _darkness))
 
 
 func _die() -> void:

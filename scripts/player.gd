@@ -2,13 +2,15 @@ class_name Player
 extends SphereWalker
 
 signal health_changed(current: float, maximum: float)
-signal nova_cooldown_changed(remaining: float, total: float)
+signal nova_changed(charges: int, max_charges: int, remaining: float)
+signal shield_changed(current: float, maximum: float)
 signal died
 signal energy_changed(current: float, maximum: float, light: float)
 signal cargo_changed(carried: float, capacity: float)
 signal powerups_changed(active: Dictionary)
 signal prompt_changed(text: String)
 signal launch_requested
+signal shop_requested
 
 const PROJECTILE := preload("res://scenes/projectile.tscn")
 const AIM_MASK := 1 | 4  # world + enemies
@@ -30,6 +32,8 @@ const AIM_MASK := 1 | 4  # world + enemies
 @export var nova_radius := 9.0
 @export var nova_damage := 70.0
 @export var spread_angle := 0.14
+@export var shield_regen_delay := 4.0  ## Seconds without damage before the upgrade shield recharges.
+@export var shield_regen_rate := 12.0
 
 @export_group("Solar Energy")
 @export var max_energy := 100.0
@@ -51,11 +55,19 @@ var energy := 0.0
 var cargo := 0.0
 var dropship: Dropship
 var powerup_timers := {}  # Powerup.Type -> seconds left
+var shield := 0.0
+var shield_max := 0.0
+var nova_max_charges := 1
+var gun_count := 1
 
 var _yaw_input := 0.0
 var _pitch := -0.35
 var _fire_timer := 0.0
 var _nova_timer := 0.0
+var _nova_charges := 1
+var _shield_regen_timer := 0.0
+var _interact_lock := false  # Set after closing the shop so the same E press doesn't reopen it.
+var _base := {}  # Un-upgraded stat values.
 var _invuln_timer := 0.0
 var _body_material: StandardMaterial3D
 var _prompt := ""
@@ -74,7 +86,10 @@ var _day_night: DayNight
 
 func _ready() -> void:
 	super()
+	_base = {"max_health": max_health, "cargo_capacity": cargo_capacity, "mining_rate": mining_rate}
+	apply_upgrades()
 	health = max_health
+	shield = shield_max
 	_body_material = _rig.hull_material
 	_panel_material = _rig.panel_material
 	_muzzle = _rig.muzzle
@@ -97,9 +112,13 @@ func _physics_process(delta: float) -> void:
 		return
 	_fire_timer -= delta
 	_invuln_timer -= delta
-	if _nova_timer > 0.0:
-		_nova_timer = maxf(_nova_timer - delta, 0.0)
-		nova_cooldown_changed.emit(_nova_timer, nova_cooldown)
+	if _nova_charges < nova_max_charges:
+		_nova_timer -= delta
+		if _nova_timer <= 0.0:
+			_nova_charges += 1
+			_nova_timer = nova_cooldown if _nova_charges < nova_max_charges else 0.0
+		nova_changed.emit(_nova_charges, nova_max_charges, maxf(_nova_timer, 0.0))
+	_update_shield(delta)
 
 	var up := get_up()
 	align_to_surface((-global_basis.z).rotated(up, _yaw_input))
@@ -136,7 +155,7 @@ func _physics_process(delta: float) -> void:
 	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		if Input.is_action_pressed("fire") and _fire_timer <= 0.0:
 			_fire()
-		if Input.is_action_just_pressed("nova") and _nova_timer <= 0.0 and energy >= nova_energy_cost:
+		if Input.is_action_just_pressed("nova") and _nova_charges > 0 and energy >= nova_energy_cost:
 			_spend_energy(nova_energy_cost)
 			_nova()
 	_update_interaction(delta)
@@ -147,6 +166,40 @@ func _physics_process(delta: float) -> void:
 func _interrupt_mining() -> void:
 	if _mining_target or Input.is_action_pressed("interact"):
 		_mining_interrupted = true
+
+
+## Re-derives stats from the permanent upgrades in GameState.
+func apply_upgrades() -> void:
+	var old_max := max_health
+	max_health = _base.max_health + 25.0 * GameState.upgrade_level("bonus_health")
+	health = minf(health + maxf(max_health - old_max, 0.0), max_health)
+	cargo_capacity = _base.cargo_capacity + 10.0 * GameState.upgrade_level("cargo_size")
+	mining_rate = _base.mining_rate * (1.0 + 0.25 * GameState.upgrade_level("mining_speed"))
+	var old_shield := shield_max
+	shield_max = 25.0 * GameState.upgrade_level("regen_shield")
+	shield = minf(shield + maxf(shield_max - old_shield, 0.0), shield_max)
+	var old_charges := nova_max_charges
+	nova_max_charges = 1 + GameState.upgrade_level("nova_charge")
+	_nova_charges = mini(_nova_charges + maxi(nova_max_charges - old_charges, 0), nova_max_charges)
+	gun_count = 1 + GameState.upgrade_level("extra_gun")
+	_rig.set_gun_count(gun_count)
+	health_changed.emit(health, max_health)
+	cargo_changed.emit(cargo, cargo_capacity)
+	shield_changed.emit(shield, shield_max)
+	nova_changed.emit(_nova_charges, nova_max_charges, _nova_timer)
+
+
+func lock_interact() -> void:
+	_interact_lock = true
+
+
+func _update_shield(delta: float) -> void:
+	if shield >= shield_max:
+		return
+	_shield_regen_timer -= delta
+	if _shield_regen_timer <= 0.0:
+		shield = minf(shield + shield_regen_rate * delta, shield_max)
+		shield_changed.emit(shield, shield_max)
 
 
 func apply_powerup(type: Powerup.Type) -> void:
@@ -186,6 +239,8 @@ func _update_interaction(delta: float) -> void:
 	var interact := Input.is_action_pressed("interact")
 	if not interact:
 		_mining_interrupted = false
+		_interact_lock = false
+	var pressed := Input.is_action_just_pressed("interact") and not _interact_lock
 	var prompt := ""
 	_mining_target = null
 	if dropship and dropship.is_in_range(self):
@@ -193,9 +248,13 @@ func _update_interaction(delta: float) -> void:
 			dropship.deposit(cargo)
 			cargo = 0.0
 			cargo_changed.emit(cargo, cargo_capacity)
-		if dropship.quota_met():
+		if dropship.is_at_console(self):
+			prompt = "Press E to open the shop (%d credits)" % GameState.credits
+			if pressed:
+				shop_requested.emit()
+		elif dropship.quota_met():
 			prompt = "Press E to launch to the next asteroid"
-			if Input.is_action_just_pressed("interact"):
+			if pressed:
 				launch_requested.emit()
 		else:
 			prompt = "Dropship: need %d more fuel" % ceili(dropship.quota - dropship.stored)
@@ -283,6 +342,16 @@ func take_damage(amount: float) -> void:
 	if powerup_timers.has(Powerup.Type.SHIELD):
 		_flash(Powerup.INFO[Powerup.Type.SHIELD].color)
 		return
+	_shield_regen_timer = shield_regen_delay
+	if shield > 0.0:
+		var absorbed := minf(shield, amount)
+		shield -= absorbed
+		amount -= absorbed
+		shield_changed.emit(shield, shield_max)
+		if amount <= 0.0:
+			_invuln_timer = invulnerability_time
+			_flash(Color(0.4, 0.75, 1.0))
+			return
 	health = maxf(health - amount, 0.0)
 	_invuln_timer = invulnerability_time
 	health_changed.emit(health, max_health)
@@ -309,11 +378,14 @@ func _fire() -> void:
 	var angles := [0.0]
 	if powerup_timers.has(Powerup.Type.SPREAD):
 		angles = [-spread_angle, 0.0, spread_angle]
-	for angle: float in angles:
-		var projectile := PROJECTILE.instantiate()
-		projectile.process_mode = Node.PROCESS_MODE_PAUSABLE
-		get_parent().add_child(projectile)
-		projectile.launch(origin, dir.rotated(get_up(), angle), damage)
+	var right := _muzzle.global_basis.x
+	for gun in gun_count:
+		var from := origin + right * CrawlerRig.gun_offset(gun, gun_count)
+		for angle: float in angles:
+			var projectile := PROJECTILE.instantiate()
+			projectile.process_mode = Node.PROCESS_MODE_PAUSABLE
+			get_parent().add_child(projectile)
+			projectile.launch(from, dir.rotated(get_up(), angle), damage)
 
 
 ## The point under the crosshair. The ray starts level with the player so
@@ -329,8 +401,10 @@ func _get_aim_point() -> Vector3:
 
 func _nova() -> void:
 	_interrupt_mining()
-	_nova_timer = nova_cooldown
-	nova_cooldown_changed.emit(_nova_timer, nova_cooldown)
+	_nova_charges -= 1
+	if _nova_timer <= 0.0:
+		_nova_timer = nova_cooldown
+	nova_changed.emit(_nova_charges, nova_max_charges, _nova_timer)
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if (enemy as Node3D).global_position.distance_to(global_position) <= nova_radius:
 			enemy.take_damage(nova_damage * (2.0 if powerup_timers.has(Powerup.Type.DAMAGE) else 1.0))

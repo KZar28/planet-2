@@ -23,6 +23,9 @@ var panel_material := StandardMaterial3D.new()
 var hull := Node3D.new()
 var turret := Node3D.new()
 var muzzle := Marker3D.new()
+var _barrels := Node3D.new()
+var _dark_material: StandardMaterial3D
+var _glow_material: StandardMaterial3D
 
 var _legs: Array[Dictionary] = []
 var _phase := 0.0
@@ -81,16 +84,10 @@ func _ready() -> void:
 	mount.radius = 0.16
 	mount.height = 0.32
 	_mesh(turret, mount, dark, Vector3.ZERO)
-	var barrel := CylinderMesh.new()
-	barrel.top_radius = 0.05
-	barrel.bottom_radius = 0.07
-	barrel.height = 0.6
-	var barrel_mi := _mesh(turret, barrel, dark, Vector3(0, 0, -0.3))
-	barrel_mi.rotation.x = deg_to_rad(90.0)
-	var tip := SphereMesh.new()
-	tip.radius = 0.06
-	tip.height = 0.12
-	_mesh(turret, tip, glow, Vector3(0, 0, -0.6))
+	_dark_material = dark
+	_glow_material = glow
+	turret.add_child(_barrels)
+	set_gun_count(1)
 	muzzle.position = Vector3(0, 0, -0.68)
 	turret.add_child(muzzle)
 
@@ -119,6 +116,31 @@ func _ready() -> void:
 
 
 ## speed: ground speed in m/s. mine_target: global point the laser hits.
+const GUN_SPACING := 0.2
+
+
+## Lateral offset of barrel `index` out of `count`, centred on the turret.
+static func gun_offset(index: int, count: int) -> float:
+	return (index - (count - 1) * 0.5) * GUN_SPACING
+
+
+func set_gun_count(count: int) -> void:
+	for child in _barrels.get_children():
+		child.queue_free()
+	for i in count:
+		var x := gun_offset(i, count)
+		var barrel := CylinderMesh.new()
+		barrel.top_radius = 0.05
+		barrel.bottom_radius = 0.07
+		barrel.height = 0.6
+		var barrel_mi := _mesh(_barrels, barrel, _dark_material, Vector3(x, 0, -0.3))
+		barrel_mi.rotation.x = deg_to_rad(90.0)
+		var tip := SphereMesh.new()
+		tip.radius = 0.06
+		tip.height = 0.12
+		_mesh(_barrels, tip, _glow_material, Vector3(x, 0, -0.6))
+
+
 func animate(delta: float, speed: float, mining: bool, mine_target: Vector3) -> void:
 	_time += delta
 	_move = move_toward(_move, clampf(speed / 3.0, 0.0, 1.0), delta * 4.0)

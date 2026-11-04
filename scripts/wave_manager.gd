@@ -6,7 +6,7 @@ signal wave_started(wave: int, enemy_count: int)
 signal wave_cleared(wave: int)
 signal enemies_remaining_changed(count: int)
 signal intermission_tick(seconds_left: float, next_wave: int)
-signal enemy_killed(score_value: int)
+signal enemy_killed(score_value: int, credits: int)
 
 const ENEMY := preload("res://scenes/enemy.tscn")
 
@@ -108,7 +108,7 @@ func _random_spawn_position() -> Vector3:
 
 func _on_enemy_died(enemy: Enemy) -> void:
 	_remaining -= 1
-	enemy_killed.emit(enemy.score_value)
+	enemy_killed.emit(enemy.score_value, enemy.credits_earned())
 	enemies_remaining_changed.emit(_remaining)
 	if _remaining <= 0 and _queue.is_empty() and _active:
 		_in_intermission = true
