@@ -20,6 +20,7 @@ var _title_angle := 0.0
 @onready var _cine_cam: Camera3D = $CinematicCamera
 @onready var _player_cam: Camera3D = $Player/CameraPivot/SpringArm3D/Camera3D
 @onready var _enemies: Node3D = $Enemies
+@onready var _sun: DayNight = $Sun
 @onready var _powerups: Node = $PowerupSpawner
 
 
@@ -69,7 +70,7 @@ func _process(delta: float) -> void:
 
 
 func _set_gameplay_active(active: bool) -> void:
-	for node: Node in [_player, _waves, _powerups, _enemies]:
+	for node: Node in [_player, _waves, _powerups, _enemies, _sun]:
 		node.process_mode = Node.PROCESS_MODE_PAUSABLE if active else Node.PROCESS_MODE_DISABLED
 	_player.visible = active
 	_hud.set_gameplay_visible(active)
