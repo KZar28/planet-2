@@ -207,6 +207,8 @@ func _launch() -> void:
 
 
 func _on_enemy_killed(value: int, credits := 0) -> void:
+	if game_over:
+		return
 	GameState.credits += credits
 	_hud.set_credits(GameState.credits)
 	score += value
