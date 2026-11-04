@@ -6,6 +6,9 @@ extends StaticBody3D
 signal fuel_changed(stored: float, quota: float)
 
 @export var interact_radius := 7.0
+@export var console_radius := 1.5
+
+const CONSOLE_SPOT := Vector3(2.3, 0, 0)  ## Where the player stands to use the console.
 
 var quota := 100.0
 var stored := 0.0
@@ -61,6 +64,8 @@ func _ready() -> void:
 		var a := TAU * i / 3.0
 		_add_mesh(leg, Vector3(cos(a) * 1.7, 0.7, sin(a) * 1.7))
 
+	_build_console(dark)
+
 	var shape := CylinderShape3D.new()
 	shape.radius = 1.6
 	shape.height = 6.0
@@ -108,6 +113,33 @@ func set_thrusters(on: bool) -> void:
 	thrusters_on = on
 	_flame.visible = on
 	_flame_light.visible = on
+
+
+func is_at_console(node: Node3D) -> bool:
+	return node.global_position.distance_to(to_global(CONSOLE_SPOT)) <= console_radius
+
+
+## Shop terminal mounted on the side of the hull.
+func _build_console(dark: StandardMaterial3D) -> void:
+	var screen_mat := StandardMaterial3D.new()
+	screen_mat.albedo_color = Color(0.02, 0.1, 0.08)
+	screen_mat.emission_enabled = true
+	screen_mat.emission = Color(0.3, 1.0, 0.7)
+	screen_mat.emission_energy_multiplier = 1.6
+	var box := BoxMesh.new()
+	box.size = Vector3(0.6, 1.1, 0.8)
+	box.material = dark
+	_add_mesh(box, Vector3(1.75, 0.95, 0))
+	var screen := BoxMesh.new()
+	screen.size = Vector3(0.06, 0.45, 0.65)
+	screen.material = screen_mat
+	_add_mesh(screen, Vector3(2.07, 1.4, 0)).rotation.z = deg_to_rad(-25.0)
+	var light := OmniLight3D.new()
+	light.light_color = Color(0.3, 1.0, 0.7)
+	light.omni_range = 3.0
+	light.light_energy = 0.8
+	light.position = Vector3(2.4, 1.5, 0)
+	add_child(light)
 
 
 func is_in_range(node: Node3D) -> bool:

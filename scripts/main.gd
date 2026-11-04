@@ -28,18 +28,26 @@ func _ready() -> void:
 	high_score = _load_high_score()
 	score = GameState.score
 	_dropship.quota = GameState.fuel_quota()
+	GameState.ensure_shop_offers()
 	_player.dropship = _dropship
 	_player.energy_changed.connect(_hud.set_energy)
 	_player.cargo_changed.connect(_hud.set_cargo)
 	_player.powerups_changed.connect(_hud.set_powerups)
 	_player.prompt_changed.connect(_hud.set_prompt)
 	_player.launch_requested.connect(_launch)
+	_player.shop_requested.connect(_open_shop)
+	_player.shield_changed.connect(_hud.set_shield)
+	_hud.shop.purchased.connect(_on_shop_purchased)
+	_hud.shop.closed.connect(_close_shop)
+	_hud.set_credits(GameState.credits)
+	_hud.set_shield(_player.shield, _player.shield_max)
+	_hud.set_nova(1, _player.nova_max_charges, 0.0)
 	_dropship.fuel_changed.connect(_on_fuel_changed)
 	_hud.set_asteroid(GameState.level)
 	_hud.set_fuel(0.0, _dropship.quota)
 	_hud.set_cargo(0.0, _player.cargo_capacity)
 	_player.health_changed.connect(_hud.set_health)
-	_player.nova_cooldown_changed.connect(_hud.set_nova_cooldown)
+	_player.nova_changed.connect(_hud.set_nova)
 	_player.died.connect(_on_player_died)
 	_waves.wave_started.connect(_on_wave_started)
 	_waves.wave_cleared.connect(_on_wave_cleared)
@@ -136,6 +144,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			if _is_skip(event):
 				get_tree().reload_current_scene()
 			return
+	if _hud.shop.visible:
+		if event.is_action_pressed("ui_cancel") or event.is_action_pressed("interact"):
+			_close_shop()
+		return
 	if game_over:
 		if event.is_action_pressed("restart"):
 			get_tree().reload_current_scene()
@@ -194,9 +206,33 @@ func _launch() -> void:
 	_sequence.tween_callback(get_tree().reload_current_scene)
 
 
-func _on_enemy_killed(value: int) -> void:
+func _on_enemy_killed(value: int, credits := 0) -> void:
+	GameState.credits += credits
+	_hud.set_credits(GameState.credits)
 	score += value
 	_hud.set_score(score, maxi(score, high_score))
+
+
+func _open_shop() -> void:
+	if phase != Phase.PLAYING or game_over:
+		return
+	get_tree().paused = true
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_hud.shop.open()
+
+
+func _close_shop() -> void:
+	_hud.shop.hide()
+	get_tree().paused = false
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	_player.lock_interact()
+
+
+func _on_shop_purchased(id: String) -> void:
+	if GameState.buy(id):
+		_player.apply_upgrades()
+		_hud.set_credits(GameState.credits)
+		_hud.shop.refresh()
 
 
 func _on_player_died() -> void:

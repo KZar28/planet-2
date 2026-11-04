@@ -22,13 +22,28 @@ var _message_token := 0
 @onready var _overlay_title: Label = $Overlay/Center/Box/Title
 @onready var _overlay_body: Label = $Overlay/Center/Box/Body
 
+var shop := ShopPanel.new()
+var _credits_label: Label
+var _shield_label: Label
+
 
 func _ready() -> void:
 	_overlay.hide()
+	_shield_label = _nova_label.duplicate()
+	_shield_label.add_theme_color_override("font_color", Color(0.45, 0.8, 1.0))
+	$Stats.add_child(_shield_label)
+	$Stats.move_child(_shield_label, _health_bar.get_index() + 1)
+	_shield_label.hide()
+	_credits_label = _cargo_label.duplicate()
+	_credits_label.add_theme_color_override("font_color", Color(1.0, 0.88, 0.35))
+	$Stats.add_child(_credits_label)
+	$Stats.move_child(_credits_label, _cargo_label.get_index() + 1)
+	add_child(shop)
 	_message.text = ""
 	set_wave(0)
 	set_enemies_remaining(0)
-	set_nova_cooldown(0.0, 1.0)
+	set_nova(1, 1, 0.0)
+	set_credits(0)
 	_prompt.text = ""
 	_powerup_label.text = ""
 
@@ -72,7 +87,7 @@ func show_title(best: int) -> void:
 	_overlay.show()
 	_overlay.color.a = 0.3
 	_overlay_title.text = "PLANET 2"
-	_overlay_body.text = "Mine fuel. Survive the dark side. Reach the next asteroid.\n\nWASD move   Mouse aim   LMB shoot   F Nova\nShift sprint   E mine / launch   Esc pause\n\nBest score: %d\n\nClick to start" % best
+	_overlay_body.text = "Mine fuel. Survive the dark side. Reach the next asteroid.\n\nWASD move   Mouse aim   LMB shoot   F Nova\nShift sprint   E mine / launch / shop console   Esc pause\n\nBest score: %d\n\nClick to start" % best
 
 
 func hide_overlay() -> void:
@@ -97,8 +112,22 @@ func set_health(current: float, maximum: float) -> void:
 	_health_label.text = "HP %d / %d" % [ceili(current), roundi(maximum)]
 
 
-func set_nova_cooldown(remaining: float, _total: float) -> void:
-	_nova_label.text = "Nova [F / RMB]: READY" if remaining <= 0.0 else "Nova [F / RMB]: %.1fs" % remaining
+func set_nova(charges: int, max_charges: int, remaining: float) -> void:
+	if max_charges <= 1:
+		_nova_label.text = "Nova [F / RMB]: READY" if charges > 0 else "Nova [F / RMB]: %.1fs" % remaining
+	elif charges < max_charges:
+		_nova_label.text = "Nova [F / RMB]: %d/%d  (+1 in %.1fs)" % [charges, max_charges, remaining]
+	else:
+		_nova_label.text = "Nova [F / RMB]: %d/%d" % [charges, max_charges]
+
+
+func set_shield(current: float, maximum: float) -> void:
+	_shield_label.visible = maximum > 0.0
+	_shield_label.text = "Shield %d / %d" % [ceili(current), roundi(maximum)]
+
+
+func set_credits(credits: int) -> void:
+	_credits_label.text = "Credits: %d" % credits
 
 
 func set_wave(wave: int) -> void:
