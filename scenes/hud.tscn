@@ -1,5 +1,6 @@
 [gd_scene load_steps=4 format=3]
 
+[ext_resource type="Script" path="res://scripts/hud_markers.gd" id="markers"]
 [ext_resource type="Script" path="res://scripts/hud.gd" id="1_hud"]
 
 [sub_resource type="StyleBoxFlat" id="Style_bar_bg"]
@@ -43,7 +44,7 @@ vertical_alignment = 1
 offset_left = 20.0
 offset_top = 20.0
 offset_right = 320.0
-offset_bottom = 100.0
+offset_bottom = 220.0
 theme_override_constants/separation = 6
 
 [node name="HealthBar" type="ProgressBar" parent="Stats"]
@@ -73,6 +74,30 @@ theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 4
 text = "Nova [F / RMB]: READY"
 
+[node name="EnergyBar" type="ProgressBar" parent="Stats"]
+self_modulate = Color(1, 0.85, 0.25, 1)
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+value = 100.0
+show_percentage = false
+
+[node name="EnergyLabel" type="Label" parent="Stats/EnergyBar"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="CargoLabel" type="Label" parent="Stats"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.65, 0.2, 1)
+
+[node name="PowerupLabel" type="Label" parent="Stats"]
+layout_mode = 2
+
 [node name="WaveInfo" type="VBoxContainer" parent="."]
 anchors_preset = 1
 anchor_left = 1.0
@@ -80,7 +105,7 @@ anchor_right = 1.0
 offset_left = -320.0
 offset_top = 20.0
 offset_right = -20.0
-offset_bottom = 120.0
+offset_bottom = 200.0
 grow_horizontal = 0
 
 [node name="WaveLabel" type="Label" parent="WaveInfo"]
@@ -104,6 +129,34 @@ theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 4
 text = "Score: 0   Best: 0"
 horizontal_alignment = 2
+
+[node name="AsteroidLabel" type="Label" parent="WaveInfo"]
+layout_mode = 2
+horizontal_alignment = 2
+
+[node name="FuelLabel" type="Label" parent="WaveInfo"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.65, 0.2, 1)
+horizontal_alignment = 2
+
+[node name="Markers" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+script = ExtResource("markers")
+
+[node name="Prompt" type="Label" parent="."]
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -110.0
+offset_bottom = -70.0
+theme_override_font_sizes/font_size = 22
+theme_override_constants/outline_size = 6
+horizontal_alignment = 1
 
 [node name="Message" type="Label" parent="."]
 anchors_preset = 10

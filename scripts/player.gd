@@ -4,6 +4,11 @@ extends SphereWalker
 signal health_changed(current: float, maximum: float)
 signal nova_cooldown_changed(remaining: float, total: float)
 signal died
+signal energy_changed(current: float, maximum: float, light: float)
+signal cargo_changed(carried: float, capacity: float)
+signal powerups_changed(active: Dictionary)
+signal prompt_changed(text: String)
+signal launch_requested
 
 const PROJECTILE := preload("res://scenes/projectile.tscn")
 const AIM_MASK := 1 | 4  # world + enemies
@@ -24,9 +29,28 @@ const AIM_MASK := 1 | 4  # world + enemies
 @export var nova_cooldown := 6.0
 @export var nova_radius := 9.0
 @export var nova_damage := 70.0
+@export var spread_angle := 0.14
+
+@export_group("Solar Energy")
+@export var max_energy := 100.0
+@export var solar_charge_rate := 9.0  ## Per second in full sunlight.
+@export var dark_drain_rate := 0.8  ## Per second while in darkness.
+@export var sprint_energy_cost := 12.0  ## Per second.
+@export var nova_energy_cost := 30.0
+@export var mining_energy_cost := 5.0  ## Per second.
+
+@export_group("Mining")
+@export var cargo_capacity := 40.0
+@export var mining_rate := 8.0  ## Fuel per second.
+@export var mining_range := 3.2
+@export var cargo_slowdown := 0.3  ## Speed lost at full cargo.
 
 var health := 0.0
 var is_dead := false
+var energy := 0.0
+var cargo := 0.0
+var dropship: Dropship
+var powerup_timers := {}  # Powerup.Type -> seconds left
 
 var _yaw_input := 0.0
 var _pitch := -0.35
@@ -34,6 +58,12 @@ var _fire_timer := 0.0
 var _nova_timer := 0.0
 var _invuln_timer := 0.0
 var _body_material: StandardMaterial3D
+var _prompt := ""
+var _mining_target: FuelDeposit
+var _panel_material := StandardMaterial3D.new()
+var _shield := MeshInstance3D.new()
+var _beam := MeshInstance3D.new()
+var _day_night: DayNight
 
 @onready var _camera_pivot: Node3D = $CameraPivot
 @onready var _camera: Camera3D = $CameraPivot/SpringArm3D/Camera3D
@@ -46,6 +76,9 @@ func _ready() -> void:
 	health = max_health
 	_body_material = (_body.mesh.surface_get_material(0) as StandardMaterial3D).duplicate()
 	_body.material_override = _body_material
+	energy = max_energy
+	_day_night = get_tree().get_first_node_in_group("day_night") as DayNight
+	_build_gear()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -71,8 +104,17 @@ func _physics_process(delta: float) -> void:
 	_yaw_input = 0.0
 	_camera_pivot.rotation.x = _pitch
 
+	_update_energy(delta)
+	_update_powerups(delta)
+
 	var input := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-	var speed := move_speed * (sprint_multiplier if Input.is_action_pressed("sprint") else 1.0)
+	var sprinting := Input.is_action_pressed("sprint") and input != Vector2.ZERO and energy > 0.0
+	if sprinting:
+		_spend_energy(sprint_energy_cost * delta)
+	var speed := move_speed * (sprint_multiplier if sprinting else 1.0)
+	speed *= 1.0 - cargo_slowdown * cargo / cargo_capacity
+	if powerup_timers.has(Powerup.Type.SPEED):
+		speed *= 1.5
 	var target := global_basis * Vector3(input.x, 0.0, input.y) * speed
 	var parts := split_velocity()
 	var horizontal: Vector3 = parts[0]
@@ -89,12 +131,153 @@ func _physics_process(delta: float) -> void:
 	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		if Input.is_action_pressed("fire") and _fire_timer <= 0.0:
 			_fire()
-		if Input.is_action_just_pressed("nova") and _nova_timer <= 0.0:
+		if Input.is_action_just_pressed("nova") and _nova_timer <= 0.0 and energy >= nova_energy_cost:
+			_spend_energy(nova_energy_cost)
 			_nova()
+	_update_interaction(delta)
+
+
+func apply_powerup(type: Powerup.Type) -> void:
+	powerup_timers[type] = Powerup.INFO[type].duration
+	powerups_changed.emit(powerup_timers)
+	_flash(Powerup.INFO[type].color)
+
+
+func _update_energy(delta: float) -> void:
+	var light := _day_night.light_at(global_position) if _day_night else 1.0
+	energy += solar_charge_rate * light * delta
+	if light < 0.2:
+		energy -= dark_drain_rate * delta
+	energy = clampf(energy, 0.0, max_energy)
+	_panel_material.emission_energy_multiplier = light * 1.5
+	energy_changed.emit(energy, max_energy, light)
+
+
+func _spend_energy(amount: float) -> void:
+	energy = maxf(energy - amount, 0.0)
+
+
+func _update_powerups(delta: float) -> void:
+	if powerup_timers.is_empty():
+		_shield.visible = false
+		return
+	for type in powerup_timers.keys():
+		powerup_timers[type] -= delta
+		if powerup_timers[type] <= 0.0:
+			powerup_timers.erase(type)
+	_shield.visible = powerup_timers.has(Powerup.Type.SHIELD)
+	powerups_changed.emit(powerup_timers)
+
+
+## Deposits cargo at the dropship automatically; E mines nearby fuel or launches.
+func _update_interaction(delta: float) -> void:
+	var interact := Input.is_action_pressed("interact")
+	var prompt := ""
+	_mining_target = null
+	if dropship and dropship.is_in_range(self):
+		if cargo > 0.0:
+			dropship.deposit(cargo)
+			cargo = 0.0
+			cargo_changed.emit(cargo, cargo_capacity)
+		if dropship.quota_met():
+			prompt = "Press E to launch to the next asteroid"
+			if Input.is_action_just_pressed("interact"):
+				launch_requested.emit()
+		else:
+			prompt = "Dropship: need %d more fuel" % ceili(dropship.quota - dropship.stored)
+	else:
+		var deposit := _nearest_deposit()
+		if deposit:
+			if cargo >= cargo_capacity:
+				prompt = "Cargo full - return to the dropship"
+			elif energy <= 0.0:
+				prompt = "Out of energy - get into the sunlight"
+			elif interact:
+				prompt = "Mining..."
+				_mining_target = deposit
+				_spend_energy(mining_energy_cost * delta)
+				cargo += deposit.mine(minf(mining_rate * delta, cargo_capacity - cargo))
+				cargo_changed.emit(cargo, cargo_capacity)
+			else:
+				prompt = "Hold E to mine fuel"
+	_update_beam()
+	if prompt != _prompt:
+		_prompt = prompt
+		prompt_changed.emit(prompt)
+
+
+func _nearest_deposit() -> FuelDeposit:
+	var best: FuelDeposit = null
+	var best_dist := mining_range
+	for deposit: FuelDeposit in get_tree().get_nodes_in_group("fuel_deposits"):
+		var dist := deposit.global_position.distance_to(global_position)
+		if dist <= best_dist:
+			best = deposit
+			best_dist = dist
+	return best
+
+
+func _update_beam() -> void:
+	_beam.visible = _mining_target != null
+	if not _beam.visible:
+		return
+	var from := _muzzle.global_position
+	var to := _mining_target.global_position + _mining_target.global_basis.y * 0.6
+	var dir := to - from
+	var y := dir.normalized()
+	var x := y.cross(Vector3.UP if absf(y.y) < 0.9 else Vector3.RIGHT).normalized()
+	_beam.global_transform = Transform3D(Basis(x, y * dir.length(), y.cross(x)), from + dir * 0.5)
+
+
+func _build_gear() -> void:
+	_panel_material.albedo_color = Color(0.1, 0.15, 0.4)
+	_panel_material.metallic = 0.8
+	_panel_material.roughness = 0.2
+	_panel_material.emission_enabled = true
+	_panel_material.emission = Color(0.3, 0.6, 1.0)
+	var panel_mesh := BoxMesh.new()
+	panel_mesh.size = Vector3(1.1, 0.06, 0.7)
+	panel_mesh.material = _panel_material
+	var panel := MeshInstance3D.new()
+	panel.mesh = panel_mesh
+	panel.position = Vector3(0, 1.75, 0.45)
+	panel.rotation.x = deg_to_rad(-30.0)
+	add_child(panel)
+
+	var shield_mat := StandardMaterial3D.new()
+	shield_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	shield_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	shield_mat.albedo_color = Color(0.3, 0.7, 1.0, 0.25)
+	var shield_mesh := SphereMesh.new()
+	shield_mesh.radius = 1.4
+	shield_mesh.height = 2.8
+	shield_mesh.material = shield_mat
+	_shield.mesh = shield_mesh
+	_shield.position = Vector3(0, 1.0, 0)
+	_shield.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_shield.visible = false
+	add_child(_shield)
+
+	var beam_mat := StandardMaterial3D.new()
+	beam_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	beam_mat.albedo_color = FuelDeposit.COLOR
+	var beam_mesh := CylinderMesh.new()
+	beam_mesh.top_radius = 0.04
+	beam_mesh.bottom_radius = 0.04
+	beam_mesh.height = 1.0
+	beam_mesh.material = beam_mat
+	_beam.mesh = beam_mesh
+	_beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_beam.top_level = true
+	_beam.visible = false
+	add_child(_beam)
 
 
 func take_damage(amount: float) -> void:
 	if is_dead or _invuln_timer > 0.0:
+		return
+	if powerup_timers.has(Powerup.Type.SHIELD):
+		_flash(Powerup.INFO[Powerup.Type.SHIELD].color)
 		return
 	health = maxf(health - amount, 0.0)
 	_invuln_timer = invulnerability_time
@@ -116,10 +299,16 @@ func heal(amount: float) -> void:
 func _fire() -> void:
 	_fire_timer = fire_cooldown
 	var origin := _muzzle.global_position
-	var projectile := PROJECTILE.instantiate()
-	projectile.process_mode = Node.PROCESS_MODE_PAUSABLE
-	get_parent().add_child(projectile)
-	projectile.launch(origin, (_get_aim_point() - origin).normalized(), projectile_damage)
+	var dir := (_get_aim_point() - origin).normalized()
+	var damage := projectile_damage * (2.0 if powerup_timers.has(Powerup.Type.DAMAGE) else 1.0)
+	var angles := [0.0]
+	if powerup_timers.has(Powerup.Type.SPREAD):
+		angles = [-spread_angle, 0.0, spread_angle]
+	for angle: float in angles:
+		var projectile := PROJECTILE.instantiate()
+		projectile.process_mode = Node.PROCESS_MODE_PAUSABLE
+		get_parent().add_child(projectile)
+		projectile.launch(origin, dir.rotated(get_up(), angle), damage)
 
 
 ## The point under the crosshair. The ray starts level with the player so
@@ -138,7 +327,7 @@ func _nova() -> void:
 	nova_cooldown_changed.emit(_nova_timer, nova_cooldown)
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if (enemy as Node3D).global_position.distance_to(global_position) <= nova_radius:
-			enemy.take_damage(nova_damage)
+			enemy.take_damage(nova_damage * (2.0 if powerup_timers.has(Powerup.Type.DAMAGE) else 1.0))
 	_spawn_nova_effect()
 
 

@@ -9,6 +9,13 @@ var _message_token := 0
 @onready var _enemies_label: Label = $WaveInfo/EnemiesLabel
 @onready var _score_label: Label = $WaveInfo/ScoreLabel
 @onready var _message: Label = $Message
+@onready var _energy_bar: ProgressBar = $Stats/EnergyBar
+@onready var _energy_label: Label = $Stats/EnergyBar/EnergyLabel
+@onready var _cargo_label: Label = $Stats/CargoLabel
+@onready var _powerup_label: Label = $Stats/PowerupLabel
+@onready var _asteroid_label: Label = $WaveInfo/AsteroidLabel
+@onready var _fuel_label: Label = $WaveInfo/FuelLabel
+@onready var _prompt: Label = $Prompt
 @onready var _overlay: Control = $Overlay
 @onready var _overlay_title: Label = $Overlay/Center/Box/Title
 @onready var _overlay_body: Label = $Overlay/Center/Box/Body
@@ -20,6 +27,38 @@ func _ready() -> void:
 	set_wave(0)
 	set_enemies_remaining(0)
 	set_nova_cooldown(0.0, 1.0)
+	_prompt.text = ""
+	_powerup_label.text = ""
+
+
+func set_energy(current: float, maximum: float, light: float) -> void:
+	_energy_bar.max_value = maximum
+	_energy_bar.value = current
+	var state := "charging" if light > 0.05 else "dark"
+	_energy_label.text = "Solar %d%% (%s)" % [roundi(100.0 * current / maximum), state]
+
+
+func set_cargo(carried: float, capacity: float) -> void:
+	_cargo_label.text = "Cargo: %d / %d fuel" % [floori(carried), roundi(capacity)]
+
+
+func set_powerups(active: Dictionary) -> void:
+	var lines: PackedStringArray = []
+	for type in active:
+		lines.append("%s %.0fs" % [Powerup.INFO[type].name, ceilf(active[type])])
+	_powerup_label.text = "\n".join(lines)
+
+
+func set_prompt(text: String) -> void:
+	_prompt.text = text
+
+
+func set_asteroid(level: int) -> void:
+	_asteroid_label.text = "Asteroid %d" % level
+
+
+func set_fuel(stored: float, quota: float) -> void:
+	_fuel_label.text = "Dropship fuel: %d / %d" % [floori(stored), roundi(quota)]
 
 
 func set_health(current: float, maximum: float) -> void:
@@ -45,7 +84,7 @@ func set_score(score: int, high_score: int) -> void:
 
 
 func set_intermission(seconds_left: float, next_wave: int) -> void:
-	var header := "DEFEND THE PLANET" if next_wave == 1 else "WAVE %d CLEARED" % (next_wave - 1)
+	var header := "MINE FUEL AND SURVIVE" if next_wave == 1 else "WAVE %d CLEARED" % (next_wave - 1)
 	_message_token += 1
 	_message.text = "%s\nWave %d in %d" % [header, next_wave, ceili(seconds_left)]
 
@@ -65,9 +104,9 @@ func show_paused(paused: bool) -> void:
 	_overlay_body.text = "Press Esc or click to resume"
 
 
-func show_game_over(wave: int, score: int, high_score: int) -> void:
+func show_game_over(level: int, wave: int, score: int, high_score: int) -> void:
 	_message.text = ""
 	_overlay.show()
 	_overlay_title.text = "YOU WERE OVERRUN"
 	var best := "New best!" if score >= high_score and score > 0 else "Best: %d" % high_score
-	_overlay_body.text = "Survived to wave %d\nScore: %d   %s\n\nPress R or Enter to try again" % [wave, score, best]
+	_overlay_body.text = "Reached asteroid %d, wave %d\nScore: %d   %s\n\nPress R or Enter to try again" % [level, wave, score, best]

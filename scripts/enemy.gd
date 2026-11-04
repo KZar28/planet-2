@@ -15,6 +15,10 @@ const STATS := {
 @export var turn_speed := 6.0
 @export var attack_range := 1.3
 @export var attack_cooldown := 1.2
+@export_group("Dark side")
+@export var dark_speed_bonus := 0.45
+@export var dark_damage_bonus := 0.6
+@export var dark_toughness := 0.6  ## Damage taken is divided by 1 + this in full dark.
 
 var max_health := 50.0
 var health := 50.0
@@ -28,6 +32,9 @@ var _attack_timer := 0.0
 var _dying := false
 var _player: Player
 var _material: StandardMaterial3D
+var _eye_material := StandardMaterial3D.new()
+var _darkness := 0.0
+var _day_night: DayNight
 
 @onready var _visual: Node3D = $Visual
 @onready var _body: MeshInstance3D = $Visual/Body
@@ -60,12 +67,22 @@ func _ready() -> void:
 	_material.albedo_color = stats.color
 	_body.material_override = _material
 	_player = get_tree().get_first_node_in_group("player") as Player
+	_day_night = get_tree().get_first_node_in_group("day_night") as DayNight
+	_eye_material.emission_enabled = true
+	_eye_material.emission_energy_multiplier = 3.0
+	for child in _visual.get_children():
+		if child is MeshInstance3D and child != _body:
+			(child as MeshInstance3D).material_override = _eye_material
 
 
 func _physics_process(delta: float) -> void:
 	if _dying:
 		return
 	_attack_timer -= delta
+	_darkness = 1.0 - _day_night.light_at(global_position) if _day_night else 0.0
+	var eye_color := Color(1.0, 0.95, 0.4).lerp(Color(1.0, 0.1, 0.6), _darkness)
+	_eye_material.albedo_color = eye_color
+	_eye_material.emission = eye_color
 	var up := get_up()
 	var horizontal := Vector3.ZERO
 	if is_instance_valid(_player) and not _player.is_dead:
@@ -78,7 +95,7 @@ func _physics_process(delta: float) -> void:
 		else:
 			align_to_surface(-global_basis.z)
 		if dir.length() > reach * 0.8:
-			horizontal = -global_basis.z * move_speed
+			horizontal = -global_basis.z * move_speed * (1.0 + dark_speed_bonus * _darkness)
 		if to_player.length() <= reach and _attack_timer <= 0.0:
 			_attack()
 	else:
@@ -92,7 +109,7 @@ func _physics_process(delta: float) -> void:
 func take_damage(amount: float) -> void:
 	if _dying:
 		return
-	health -= amount
+	health -= amount / (1.0 + dark_toughness * _darkness)
 	_material.emission_enabled = true
 	_material.emission = Color.WHITE
 	_material.emission_energy_multiplier = 3.0
@@ -103,7 +120,7 @@ func take_damage(amount: float) -> void:
 
 func _attack() -> void:
 	_attack_timer = attack_cooldown
-	_player.take_damage(contact_damage)
+	_player.take_damage(contact_damage * (1.0 + dark_damage_bonus * _darkness))
 	var tween := create_tween()
 	tween.tween_property(_visual, "position", Vector3(0, 0, -0.4 * _size), 0.08)
 	tween.tween_property(_visual, "position", Vector3.ZERO, 0.15)
