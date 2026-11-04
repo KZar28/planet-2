@@ -19,6 +19,9 @@ const STATS := {
 @export var dark_speed_bonus := 0.45
 @export var dark_damage_bonus := 0.6
 @export var dark_toughness := 0.6  ## Damage taken is divided by 1 + this in full dark.
+@export_group("Hopping (Brute)")
+@export var hop_pause := 0.8  ## Seconds crouched on the ground between leaps.
+@export var hop_up_speed := 9.0
 
 var max_health := 50.0
 var health := 50.0
@@ -36,9 +39,14 @@ var _material: StandardMaterial3D
 var _eye_material := StandardMaterial3D.new()
 var _darkness := 0.0
 var _day_night: DayNight
+var _rig: CreatureRig
+var _hops := false
+var _hop_timer := 0.0
+var _hop_velocity := Vector3.ZERO
+var _airborne := false
+var _air_time := 0.0
 
 @onready var _visual: Node3D = $Visual
-@onready var _body: MeshInstance3D = $Visual/Body
 @onready var _collision: CollisionShape3D = $CollisionShape3D
 
 
@@ -65,16 +73,21 @@ func _ready() -> void:
 	_collision.shape = shape
 	_collision.position *= _size
 
-	_material = (_body.mesh.surface_get_material(0) as StandardMaterial3D).duplicate()
+	_material = StandardMaterial3D.new()
 	_material.albedo_color = stats.color
-	_body.material_override = _material
+	_material.roughness = 0.6
 	_player = get_tree().get_first_node_in_group("player") as Player
 	_day_night = get_tree().get_first_node_in_group("day_night") as DayNight
 	_eye_material.emission_enabled = true
 	_eye_material.emission_energy_multiplier = 3.0
-	for child in _visual.get_children():
-		if child is MeshInstance3D and child != _body:
-			(child as MeshInstance3D).material_override = _eye_material
+	_hops = type == Type.BRUTE
+	_hop_timer = randf() * hop_pause
+	_rig = FrogRig.new() if _hops else CrabRig.new()
+	_rig.body_material = _material
+	_rig.eye_material = _eye_material
+	_visual.add_child(_rig)
+	if _hops:
+		_add_hitbox(Vector3(1.4, 0.9, 1.1), Vector3(0, 0.95, -0.6))
 
 
 func _physics_process(delta: float) -> void:
@@ -87,25 +100,63 @@ func _physics_process(delta: float) -> void:
 	_eye_material.emission = eye_color
 	var up := get_up()
 	var horizontal := Vector3.ZERO
+	var vertical: float = split_velocity()[1]
+	var wants_move := false
+	var gap := 0.0
 	if is_instance_valid(_player) and not _player.is_dead:
 		var to_player := _player.global_position - global_position
 		var dir := to_player - up * to_player.dot(up)
 		var reach := attack_range + 0.6 * _size
-		if dir.length_squared() > 0.01:
+		if dir.length_squared() > 0.01 and not _airborne:
 			var fwd := (-global_basis.z).lerp(dir.normalized(), clampf(turn_speed * delta, 0.0, 1.0))
 			align_to_surface(fwd)
 		else:
 			align_to_surface(-global_basis.z)
-		if dir.length() > reach * 0.8:
-			horizontal = -global_basis.z * move_speed * (1.0 + dark_speed_bonus * _darkness)
+		wants_move = dir.length() > reach * 0.8
+		gap = dir.length() - reach * 0.6
 		if to_player.length() <= reach and _attack_timer <= 0.0:
 			_attack()
 	else:
 		align_to_surface(-global_basis.z)
 
-	var vertical: float = split_velocity()[1]
-	vertical = 0.0 if is_on_floor() else vertical - gravity_strength * delta
+	var speed := move_speed * (1.0 + dark_speed_bonus * _darkness)
+	if _hops:
+		_air_time += delta
+		if _airborne and is_on_floor() and _air_time > 0.1:
+			_airborne = false
+			_hop_timer = hop_pause
+		if _airborne:
+			horizontal = (_hop_velocity - up * _hop_velocity.dot(up)).normalized() * _hop_velocity.length()
+		elif is_on_floor():
+			_hop_timer -= delta
+			if _hop_timer <= 0.0 and wants_move:
+				_leap(speed, gap)
+				vertical = hop_up_speed
+				horizontal = _hop_velocity
+	elif wants_move:
+		horizontal = -global_basis.z * speed
+
+	if _airborne:
+		vertical -= gravity_strength * delta
+	else:
+		vertical = 0.0 if is_on_floor() else vertical - gravity_strength * delta
 	move_on_surface(horizontal, vertical)
+
+	if _hops:
+		var crouch := 0.0 if _airborne else clampf(1.0 - _hop_timer / hop_pause, 0.0, 1.0)
+		(_rig as FrogRig).animate(delta, crouch * float(wants_move), _airborne)
+	else:
+		(_rig as CrabRig).animate(delta, horizontal.length() / _size)
+
+
+## Leaps forward so the average speed over a crouch + hop cycle matches `speed`,
+## without overshooting `max_distance` (so it lands in front of the player).
+func _leap(speed: float, max_distance: float) -> void:
+	var air_time := 2.0 * hop_up_speed / gravity_strength
+	var hop_speed := minf(speed * (hop_pause + air_time) / air_time, maxf(max_distance, 0.5) / air_time)
+	_hop_velocity = -global_basis.z * hop_speed
+	_airborne = true
+	_air_time = 0.0
 
 
 func take_damage(amount: float) -> void:
@@ -123,9 +174,20 @@ func take_damage(amount: float) -> void:
 func _attack() -> void:
 	_attack_timer = attack_cooldown
 	_player.take_damage(contact_damage * (1.0 + dark_damage_bonus * _darkness))
+	_rig.attack()
 	var tween := create_tween()
 	tween.tween_property(_visual, "position", Vector3(0, 0, -0.4 * _size), 0.08)
 	tween.tween_property(_visual, "position", Vector3.ZERO, 0.15)
+
+
+## Extra collider (in unscaled rig space) so shots hit parts that stick out of the body sphere.
+func _add_hitbox(box_size: Vector3, center: Vector3) -> void:
+	var shape := BoxShape3D.new()
+	shape.size = box_size * _size
+	var hitbox := CollisionShape3D.new()
+	hitbox.shape = shape
+	hitbox.position = center * _size
+	add_child(hitbox)
 
 
 ## Credits for killing this enemy: scaled by tier, +50% in full dark.
